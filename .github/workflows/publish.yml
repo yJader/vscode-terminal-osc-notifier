@@ -1,0 +1,20 @@
+name: Publish Extension
+on:
+  push:
+    tags:
+      - "v*"
+
+jobs:
+  publish:
+    name: Release and publish
+    runs-on: ubuntu-22.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v6
+      - name: Setup Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 22
+      - name: Install dependencies
+        run: npm ci
+      - run: npx -p @vscode/vsce -y vsce publish --no-dependencies -p ${{ secrets.AZURE_ORG_PAT }}
