@@ -55,6 +55,8 @@ All settings live under **Terminal Notification** (`terminalNotification.*`).
 - `terminalNotification.preferOsNotifications` default true. Use native OS notifications. Disable to use VS Code toasts only.
 - `terminalNotification.showVsCodeNotification` default true. Show a VS Code toast alongside OS notifications.
 - `terminalNotification.ignoreProgressOsc9_4` default true. Ignore `OSC 9;4` progress updates to reduce noise.
+- `terminalNotification.skipWhenActive` default false. Skip the notification when VS Code is focused and the emitting terminal is the currently active terminal. Useful for REPL-style tools (e.g. Claude Code) that emit OSC 9 on every response — no notification needed when you are already watching the terminal.
+- `terminalNotification.sound` default empty. Play a sound with the OS notification. macOS: system sound names like `Glass`, `Ping`, `Hero`, `Submarine`, or `default` for the system default. Windows: `IM`, `Mail`, `Reminder`, `SMS`, etc. Linux: not supported. Leave empty for no sound.
 
 Commands:
 
