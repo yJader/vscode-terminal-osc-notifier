@@ -247,6 +247,16 @@ function sendOsNotification(tid: string, title: string, message: string) {
             tid,          // Custom field retrieved later in the click callback
         };
 
+        // Optional sound. Passed through to node-notifier; platform support varies:
+        //   macOS NotificationCenter: system sound names like "Glass", "Ping", "Hero",
+        //                             or "default" for the system default.
+        //   Windows Toaster: "IM", "Mail", "Reminder", "SMS", etc.
+        //   Linux notify-send: no sound support.
+        const sound = getSetting<string>('sound', '');
+        if (sound) {
+            opts.sound = sound === 'default' ? true : sound;
+        }
+
         // Try to set the VS Code icon (each platform uses a different mechanism)
         if (process.platform === 'darwin') {
             // macOS: set sender/activate to VS Code so the notification header shows the VS Code icon
@@ -325,6 +335,13 @@ export function activate(ctx: vscode.ExtensionContext) {
                 (n) => {
                     const title = n.kind === 'osc777' ? (n.title || 'Terminal') : 'Terminal';
                     const body = n.body;
+                    // Skip when the emitting terminal is already the focused one
+                    // (user is clearly watching it — no need to interrupt).
+                    if (getSetting('skipWhenActive', false)) {
+                        const vscodeFocused = vscode.window.state.focused;
+                        const isActiveTerm = vscode.window.activeTerminal === term;
+                        if (vscodeFocused && isActiveTerm) return;
+                    }
                     sendOsNotification(tid, title, body);
                     sendVsCodeNotification(tid, title, body);
                 },
