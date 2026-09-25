@@ -174,6 +174,12 @@ async function focusTerminalById(tid: string) {
     }
 }
 
+function focusUriForTerminal(tid: string): string {
+    const scheme = vscode.env.uriScheme;
+    const extId = extensionCtx.extension.id;
+    return `${scheme}://${extId}/focus?tid=${encodeURIComponent(tid)}`;
+}
+
 // -- OS notifications and VS Code notifications --
 
 // One shared click handler: node-notifier returns the options we originally passed in
@@ -279,6 +285,7 @@ function sendOsNotification(tid: string, title: string, message: string) {
             // UserNotifications does not permit overriding the notification sender.
             opts.timeout = false;
             opts.activate = 'com.microsoft.VSCode';
+            opts.open = focusUriForTerminal(tid);
             if (iconPathForOS) opts.contentImage = iconPathForOS; // Display as the notification content image (not the header badge)
         } else if (process.platform === 'win32') {
             // Windows: appID is already configured; also pass an icon for consistency
@@ -289,10 +296,7 @@ function sendOsNotification(tid: string, title: string, message: string) {
 
             // Linux fallback: deep link back to the current VS Code instance when clicked
             // Note: use vscode.env.uriScheme (vscode / vscode-insiders / code-oss)
-            const scheme = vscode.env.uriScheme;
-            const extId = extensionCtx.extension.id;
-            const uri = vscode.Uri.parse(`${scheme}://${extId}/focus?tid=${encodeURIComponent(tid)}`);
-            opts.open = uri.toString();
+            opts.open = focusUriForTerminal(tid);
         }
 
         notifier.notify(opts);
@@ -349,7 +353,9 @@ export function activate(ctx: vscode.ExtensionContext) {
 
             const parser = new OscParser(
                 (n) => {
-                    const title = n.kind === 'osc777' ? (n.title || 'Terminal') : 'Terminal';
+                    const title = n.kind === 'osc777' && n.title?.trim()
+                        ? n.title.trim()
+                        : (term.name?.trim() || 'Terminal');
                     const body = n.body;
                     // Skip when the emitting terminal is already the focused one
                     // (user is clearly watching it — no need to interrupt).
