@@ -67,10 +67,12 @@ Commands:
 
 - VS Code 1.93 or newer.
 - Shell Integration must be enabled in your integrated terminal. This is the default for supported shells.
+- On macOS, install `terminal-notifier` 3.1 or newer with Homebrew (`brew install terminal-notifier`) for native notifications. Without it, VS Code notifications still work when `terminalNotification.showVsCodeNotification` is enabled.
 
 ### Notes and limitations
 
 - Some Linux environments cannot route notification click events back to the app. The extension opens a deep link to return focus to the right terminal as a fallback.
+- On macOS, native notification clicks activate VS Code. The VS Code notification's **Focus Terminal** action selects the originating terminal.
 - Icons shown in OS notifications follow the host platform’s rules.
 
 ## Development

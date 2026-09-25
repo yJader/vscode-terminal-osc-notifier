@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { execFileSync } from 'child_process';
 
 // -- node-notifier: choose a backend appropriate for each platform --
 // eslint-disable-next-line @typescript-eslint/no-var-requires
@@ -18,7 +19,7 @@ type Notifier = {
     on?: (event: string, handler: (...args: any[]) => void) => void;
 };
 
-let notifier: Notifier;               // Platform-specific notifier instance
+let notifier: Notifier | undefined;   // Platform-specific notifier instance
 let iconPathForOS: string | undefined; // VS Code icon path (absolute)
 let extensionCtx: vscode.ExtensionContext;
 
@@ -216,12 +217,29 @@ function resolveVSCodeIconPath(): string | undefined {
     }
 }
 
+function findModernMacNotifier(): string | undefined {
+    const prefixes = [process.env.HOMEBREW_PREFIX, '/opt/homebrew', '/usr/local'];
+    for (const prefix of prefixes) {
+        if (!prefix) continue;
+        const binary = path.join(prefix, 'opt', 'terminal-notifier', 'terminal-notifier.app', 'Contents', 'MacOS', 'terminal-notifier');
+        if (!fs.existsSync(binary)) continue;
+        try {
+            const version = execFileSync(binary, ['-version'], { encoding: 'utf8', timeout: 2000 });
+            const match = version.match(/terminal-notifier (\d+)\.(\d+)\./);
+            if (match && (Number(match[1]) > 3 || (Number(match[1]) === 3 && Number(match[2]) >= 1))) {
+                return binary;
+            }
+        } catch { /* try the next Homebrew prefix */ }
+    }
+    return undefined;
+}
+
 // Create a more controllable notifier per platform
-function createPlatformNotifier(): Notifier {
+function createPlatformNotifier(): Notifier | undefined {
     try {
         if (process.platform === 'darwin') {
-            // macOS: use NotificationCenter so sender/activate maintain the VS Code icon and refocus VS Code
-            return new NotificationCenter({ withFallback: false });
+            const binary = findModernMacNotifier();
+            return binary ? new NotificationCenter({ withFallback: false, customPath: binary }) : undefined;
         }
         if (process.platform === 'win32') {
             // Windows: rely on the SnoreToast toaster and set appID so VS Code's name/icon are shown
@@ -230,20 +248,19 @@ function createPlatformNotifier(): Notifier {
         // Linux: rely on notify-send
         return new NotifySend({ withFallback: false });
     } catch {
-        // Fallback
-        return BaseNotifier;
+        return process.platform === 'darwin' ? undefined : BaseNotifier;
     }
 }
 
 function sendOsNotification(tid: string, title: string, message: string) {
     const preferOs = getSetting('preferOsNotifications', true);
-    if (!preferOs) return;
+    if (!preferOs || !notifier) return;
 
     try {
         const opts: any = {
             title: title || 'Terminal',
             message: message || '',
-            wait: true,   // Required so click events are delivered
+            wait: process.platform !== 'darwin',
             tid,          // Custom field retrieved later in the click callback
         };
 
@@ -259,9 +276,8 @@ function sendOsNotification(tid: string, title: string, message: string) {
 
         // Try to set the VS Code icon (each platform uses a different mechanism)
         if (process.platform === 'darwin') {
-            // macOS: set sender/activate to VS Code so the notification header shows the VS Code icon
-            // (terminal-notifier supports -sender / -activate)
-            opts.sender = 'com.microsoft.VSCode';
+            // UserNotifications does not permit overriding the notification sender.
+            opts.timeout = false;
             opts.activate = 'com.microsoft.VSCode';
             if (iconPathForOS) opts.contentImage = iconPathForOS; // Display as the notification content image (not the header badge)
         } else if (process.platform === 'win32') {
