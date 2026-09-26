@@ -174,10 +174,12 @@ async function focusTerminalById(tid: string) {
     }
 }
 
-function focusUriForTerminal(tid: string): string {
+async function focusUriForTerminal(tid: string): Promise<string> {
     const scheme = vscode.env.uriScheme;
     const extId = extensionCtx.extension.id;
-    return `${scheme}://${extId}/focus?tid=${encodeURIComponent(tid)}`;
+    const uri = vscode.Uri.parse(`${scheme}://${extId}/focus?tid=${encodeURIComponent(tid)}`);
+    // VS Code adds routing for this window. Preserve the returned URI unchanged.
+    return (await vscode.env.asExternalUri(uri)).toString();
 }
 
 // -- OS notifications and VS Code notifications --
@@ -258,7 +260,7 @@ function createPlatformNotifier(): Notifier | undefined {
     }
 }
 
-function sendOsNotification(tid: string, title: string, message: string) {
+async function sendOsNotification(tid: string, title: string, message: string) {
     const preferOs = getSetting('preferOsNotifications', true);
     if (!preferOs || !notifier) return;
 
@@ -284,8 +286,7 @@ function sendOsNotification(tid: string, title: string, message: string) {
         if (process.platform === 'darwin') {
             // UserNotifications does not permit overriding the notification sender.
             opts.timeout = false;
-            opts.activate = 'com.microsoft.VSCode';
-            opts.open = focusUriForTerminal(tid);
+            opts.open = await focusUriForTerminal(tid);
             if (iconPathForOS) opts.contentImage = iconPathForOS; // Display as the notification content image (not the header badge)
         } else if (process.platform === 'win32') {
             // Windows: appID is already configured; also pass an icon for consistency
@@ -294,9 +295,7 @@ function sendOsNotification(tid: string, title: string, message: string) {
             // Linux: notify-send accepts icon paths but does not support wait/click events
             if (iconPathForOS) opts.icon = iconPathForOS;
 
-            // Linux fallback: deep link back to the current VS Code instance when clicked
-            // Note: use vscode.env.uriScheme (vscode / vscode-insiders / code-oss)
-            opts.open = focusUriForTerminal(tid);
+            // notify-send cannot open a URI; use the VS Code toast's focus action.
         }
 
         notifier.notify(opts);
@@ -330,13 +329,13 @@ export function activate(ctx: vscode.ExtensionContext) {
         vscode.commands.registerCommand('terminalNotification.disable', () => { enabled = false; vscode.window.showInformationMessage('Terminal notifications disabled'); }),
     );
 
-    // URI handler: fallback for Linux or other runtimes without click events
+    // URI handler for macOS native notification clicks.
     ctx.subscriptions.push(
         vscode.window.registerUriHandler({
             handleUri: (uri) => {
                 if (uri.path === '/focus') {
                     const tid = new URLSearchParams(uri.query).get('tid') || '';
-                    focusTerminalById(tid);
+                    return focusTerminalById(tid);
                 }
             }
         })
@@ -364,7 +363,7 @@ export function activate(ctx: vscode.ExtensionContext) {
                         const isActiveTerm = vscode.window.activeTerminal === term;
                         if (vscodeFocused && isActiveTerm) return;
                     }
-                    sendOsNotification(tid, title, body);
+                    void sendOsNotification(tid, title, body);
                     sendVsCodeNotification(tid, title, body);
                 },
                 getSetting('ignoreProgressOsc9_4', true)

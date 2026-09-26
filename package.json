@@ -1,10 +1,10 @@
 {
     "name": "vscode-terminal-osc-notifier",
-    "displayName": "Terminal Notification",
+    "displayName": "Terminal Notification (Jader)",
     "description": "Parse Ghostty-style OSC notifications (OSC 9 / OSC 777;notify;title;body) from integrated terminals and send OS/VS Code notifications. Click to focus the originating terminal tab.",
     "icon": "images/icon.png",
-    "publisher": "wenbopan",
-    "version": "0.1.4",
+    "publisher": "yjader",
+    "version": "0.1.5",
     "license": "MIT",
     "repository": {
         "type": "git",
@@ -76,7 +76,10 @@
         ]
     },
     "scripts": {
-        "vscode:prepublish": "npm run typecheck && npm run build",
+        "vscode:prepublish": "npm run typecheck && npm test && npm run build",
+        "test": "node --test tests/*.test.cjs",
+        "package": "vsce package --no-dependencies --out terminal-notification.vsix",
+        "install:local": "npm run package && code --install-extension ./terminal-notification.vsix --force",
         "build": "esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outdir=dist && node scripts/copy-notifier-assets.js",
         "typecheck": "tsc --noEmit",
         "watch": "node scripts/copy-notifier-assets.js && esbuild src/extension.ts --bundle --platform=node --format=cjs --target=node18 --external:vscode --outdir=dist --watch"
@@ -87,6 +90,7 @@
     "devDependencies": {
         "@types/node": "^20.11.19",
         "@types/vscode": "^1.93.0",
+        "@vscode/vsce": "4.0.0",
         "esbuild": "^0.23.1",
         "typescript": "^5.6.3"
     }

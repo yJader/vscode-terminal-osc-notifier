@@ -1,6 +1,8 @@
 ![Terminal Notification banner](images/banner.png)
 
-# Terminal Notification
+# Terminal Notification (Jader)
+
+Personal fork of [wbopan/vscode-terminal-osc-notifier](https://github.com/wbopan/vscode-terminal-osc-notifier), installed locally as `yjader.vscode-terminal-osc-notifier`. This fork uses Homebrew's modern macOS notifier, terminal names for body-only notifications, and window-aware macOS notification links. It is distributed as a local VSIX; no Marketplace account is required.
 
 Turn terminal messages into native system notifications you can click to jump back to the right terminal.
 
@@ -20,9 +22,51 @@ Turn terminal messages into native system notifications you can click to jump ba
 
 ## Quick start
 
-1. Install **Terminal Notification** from the VS Code Marketplace or sideload the `.vsix`.
+1. Install **Terminal Notification (Jader)** using the local VSIX instructions below, and disable the upstream extension.
 2. Run a command that emits a supported sequence from your terminal.
 3. Click the notification to focus the emitting terminal tab in VS Code.
+
+### Local installation on macOS
+
+Prerequisites: VS Code 1.93+, Node.js 22.12+ with npm, and the `code` command on your PATH. In VS Code, run **Shell Command: Install 'code' command in PATH** if needed.
+
+```sh
+brew install terminal-notifier
+git clone https://github.com/yJader/vscode-terminal-osc-notifier.git
+cd vscode-terminal-osc-notifier
+npm ci
+npm run install:local
+```
+
+For an existing checkout, start with `npm ci` in that directory. Homebrew `terminal-notifier` must be version 3.1 or newer; use `brew upgrade terminal-notifier` if an older version is installed.
+
+`install:local` checks types, runs tests, builds and packages `terminal-notification.vsix`, then installs it with `code --install-extension --force`. To build a VSIX without installing it, run `npm run package`.
+
+In the Extensions view, search for `@id:wenbopan.vscode-terminal-osc-notifier` and choose **Disable** (globally, not just for this workspace). Both extensions register the same commands and settings, so only one should be enabled. Then run **Developer: Reload Window** in each open VS Code window. Existing `terminalNotification.*` settings continue to apply.
+
+Install the fork on the local Mac, including when working in a Remote SSH window connected to xfusion6. Its `extensionKind: ["ui"]` runs the extension on the client; the remote machine does not need Homebrew or `terminal-notifier`.
+
+Allow notifications for **terminal-notifier** in macOS System Settings. macOS controls the sender label and icon; the notification's content title uses the emitting terminal's name for OSC 9. OSC 777 preserves a non-empty sender-supplied title.
+
+### Updates and rollback
+
+After updating the checkout, run `npm ci` and `npm run install:local`, then reload your VS Code windows. Increment `package.json` and the lockfile version when preparing a new release (for example, `npm version patch --no-git-tag-version`). The independent `yjader` publisher prevents Marketplace updates for the upstream extension from replacing this fork. Local VSIX updates are manual.
+
+To roll back, disable **Terminal Notification (Jader)**, re-enable the upstream extension, and reload VS Code. To remove the fork entirely:
+
+```sh
+code --uninstall-extension yjader.vscode-terminal-osc-notifier
+```
+
+### Verify notifications and window routing
+
+Open two VS Code windows. In the first, create a terminal and rename it to `Notification source`. Run:
+
+```sh
+printf '\033]9;Window routing test\007'
+```
+
+Switch to another terminal and then to the second window. Click the system notification. Its title should be `Notification source`, and the first window should come forward with the original terminal focused. Repeat from a Remote SSH terminal. If `terminalNotification.skipWhenActive` is enabled, switch away before emitting the notification (for example, add `sleep 5;` before `printf`).
 
 ### Examples you can try
 
@@ -71,17 +115,21 @@ Commands:
 
 ### Notes and limitations
 
-- Some Linux environments cannot route notification click events back to the app. The extension opens a deep link to return focus to the right terminal as a fallback.
-- On macOS, native notification clicks activate VS Code. The VS Code notification's **Focus Terminal** action selects the originating terminal.
+- Linux's `notify-send` backend does not support click-to-focus here. Use the VS Code notification's **Focus Terminal** action.
+- On macOS, native notifications open a URI resolved by `vscode.env.asExternalUri`, which includes routing to the originating VS Code window. The URI handler selects the emitting terminal. The current VS Code URI scheme is respected, including VS Code Insiders. VS Code may ask permission to open the extension URI on first use.
+- Terminal associations last for the current extension session. Old notifications cannot restore a closed terminal or reliably locate it after reloading or closing its window.
 - Icons shown in OS notifications follow the host platform’s rules.
 
 ## Development
 
 ```sh
-npm install
-npm run watch   # or: npm run compile
+npm ci
+npm test
+npm run watch   # or: npm run build
 # press F5 in VS Code to launch an Extension Development Host
 ```
+
+The tests mock the VS Code and notification APIs to check title selection, URI preservation, terminal selection, and platform branches. Actual Notification Center clicks and multi-window behavior require the manual check above.
 
 ## License
 

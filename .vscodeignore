@@ -5,6 +5,8 @@ node_modules/**
 src/**
 out/**
 scripts/**
+tests/**
+*.vsix
 tsconfig.json
 tsconfig.tsbuildinfo
 coverage/**
