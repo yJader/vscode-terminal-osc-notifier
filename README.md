@@ -2,7 +2,7 @@
 
 # Terminal Notification (Jader)
 
-Personal fork of [wbopan/vscode-terminal-osc-notifier](https://github.com/wbopan/vscode-terminal-osc-notifier), installed locally as `yjader.vscode-terminal-osc-notifier`. This fork uses Homebrew's modern macOS notifier, terminal names for body-only notifications, and window-aware macOS notification links. It is distributed as a local VSIX; no Marketplace account is required.
+Personal fork of [wbopan/vscode-terminal-osc-notifier](https://github.com/wbopan/vscode-terminal-osc-notifier), installed locally as `yjader.vscode-terminal-osc-notifier`. This fork uses Homebrew's modern macOS notifier, workspace/machine/terminal notification titles, and window-aware macOS notification links. It is distributed as a local VSIX; no Marketplace account is required.
 
 Turn terminal messages into native system notifications you can click to jump back to the right terminal.
 
@@ -46,7 +46,9 @@ In the Extensions view, search for `@id:wenbopan.vscode-terminal-osc-notifier` a
 
 Install the fork on the local Mac, including when working in a Remote SSH window connected to xfusion6. Its `extensionKind: ["ui"]` runs the extension on the client; the remote machine does not need Homebrew or `terminal-notifier`.
 
-Allow notifications for **terminal-notifier** in macOS System Settings. macOS controls the sender label and icon; the notification's content title uses the emitting terminal's name for OSC 9. OSC 777 preserves a non-empty sender-supplied title.
+Allow notifications for **terminal-notifier** in macOS System Settings. macOS controls the sender label and icon; the notification's content title uses `workspace[machine]|terminal`, for example `research[xfusion6]|codex`. This format applies to both OSC 9 and OSC 777. A non-empty OSC 777 sender title is preserved at the start of the body (`Nightly tests: Passed`).
+
+The workspace label is VS Code's workspace name (including named multi-root workspaces), falling back to the first folder name or `No workspace`. A trailing remote label matching the current host, such as ` [SSH: xfusion6]` or ` [WSL: Ubuntu]`, is removed before formatting so the machine appears only once. For Remote SSH, the machine label is the SSH connection alias from the remote workspace URI, not the local Mac hostname. Other remote providers use their remote authority identifier (for example the WSL distribution); if no remote URI is available, the provider name is used. Folderless remote windows can also use the terminal's shell integration cwd URI. Local windows use the local hostname. A shell command that manually runs `ssh` inside a local terminal does not change the window's machine label.
 
 ### Updates and rollback
 
@@ -66,7 +68,7 @@ Open two VS Code windows. In the first, create a terminal and rename it to `Noti
 printf '\033]9;Window routing test\007'
 ```
 
-Switch to another terminal and then to the second window. Click the system notification. Its title should be `Notification source`, and the first window should come forward with the original terminal focused. Repeat from a Remote SSH terminal. If `terminalNotification.skipWhenActive` is enabled, switch away before emitting the notification (for example, add `sleep 5;` before `printf`).
+Switch to another terminal and then to the second window. Click the system notification. Its title should be `workspace[machine]|Notification source` (for example `research[xfusion6]|Notification source`), and the first window should come forward with the original terminal focused. Repeat with the same workspace name on another SSH host and with different workspaces on the same host. Routing uses the originating window's URI, not the displayed title, workspace name or SSH alias. If `terminalNotification.skipWhenActive` is enabled, switch away before emitting the notification (for example, add `sleep 5;` before `printf`).
 
 ### Examples you can try
 
@@ -116,8 +118,8 @@ Commands:
 ### Notes and limitations
 
 - Linux's `notify-send` backend does not support click-to-focus here. Use the VS Code notification's **Focus Terminal** action.
-- On macOS, native notifications open a URI resolved by `vscode.env.asExternalUri`, which includes routing to the originating VS Code window. The URI handler selects the emitting terminal. The current VS Code URI scheme is respected, including VS Code Insiders. VS Code may ask permission to open the extension URI on first use.
-- Terminal associations last for the current extension session. Old notifications cannot restore a closed terminal or reliably locate it after reloading or closing its window.
+- On macOS, native notifications open a URI resolved by `vscode.env.asExternalUri`, which includes routing to the originating VS Code window. The URI handler explicitly focuses that window and the emitting terminal. The current VS Code URI scheme is respected, including VS Code Insiders. VS Code may ask permission to open the extension URI on first use.
+- Terminal associations last for the current extension session and are removed when a terminal closes. Unknown or expired terminal IDs do not select an unrelated terminal. Old notifications cannot restore a closed terminal or reliably locate it after reloading or closing its window. Test with a newly emitted notification after installing an update.
 - Icons shown in OS notifications follow the host platform’s rules.
 
 ## Development
@@ -129,7 +131,7 @@ npm run watch   # or: npm run build
 # press F5 in VS Code to launch an Extension Development Host
 ```
 
-The tests mock the VS Code and notification APIs to check title selection, URI preservation, terminal selection, and platform branches. Actual Notification Center clicks and multi-window behavior require the manual check above.
+The tests mock the VS Code and notification APIs to check workspace/host titles, URI preservation, multiple remote windows, explicit focus, stale terminal IDs, and platform branches. Actual Notification Center clicks and multi-window behavior require the manual check above.
 
 ## License
 

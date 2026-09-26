@@ -1,6 +1,7 @@
 import * as vscode from 'vscode';
 import * as path from 'path';
 import * as fs from 'fs';
+import { hostname } from 'os';
 import { execFileSync } from 'child_process';
 
 // -- node-notifier: choose a backend appropriate for each platform --
@@ -162,16 +163,40 @@ function getOrAssignTerminalId(t: vscode.Terminal): string {
 
 async function focusTerminalById(tid: string) {
     const term = idToTerminal.get(tid);
-    if (term) {
-        try { term.show(); } catch { /* ignore */ }
-    } else {
-        // If not found, prefer opening the terminal panel instead of creating a new terminal
-        try {
-            await vscode.commands.executeCommand('workbench.action.terminal.focus');
-        } catch {
-            await vscode.commands.executeCommand('workbench.action.terminal.toggleTerminal');
+    if (!term) return;
+    // The URI is routed to this extension host's window, even with multiple remotes.
+    try { await vscode.commands.executeCommand('workbench.action.focusWindow'); } catch { /* older VS Code */ }
+    try { term.show(false); } catch { /* terminal may have closed during activation */ }
+}
+
+function notificationTitle(term: vscode.Terminal): string {
+    const folders = vscode.workspace.workspaceFolders ?? [];
+    let workspace = vscode.workspace.name?.trim() || folders[0]?.name?.trim() || 'No workspace';
+    const uris = [vscode.workspace.workspaceFile, ...folders.map(folder => folder.uri), term.shellIntegration?.cwd];
+    const remote = uris.find(uri => uri?.scheme === 'vscode-remote' && uri.authority);
+    let machine = vscode.env.remoteName || hostname();
+    if (remote) {
+        const separator = remote.authority.indexOf('+');
+        machine = separator < 0 ? remote.authority : remote.authority.slice(separator + 1);
+        // Remote SSH can encode connection metadata instead of a plain SSH alias.
+        if (remote.authority.startsWith('ssh-remote+') && /^(?:[0-9a-f]{2})+$/i.test(machine)) {
+            try {
+                const connection = JSON.parse(Buffer.from(machine, 'hex').toString('utf8'));
+                if (typeof connection.hostName === 'string' && connection.hostName.trim()) {
+                    machine = connection.hostName.trim();
+                }
+            } catch { /* a plain SSH alias can also consist of hex characters */ }
         }
+        machine ||= vscode.env.remoteName || 'Remote';
     }
+    const provider = remote?.authority.split('+', 1)[0] || vscode.env.remoteName;
+    const label = provider === 'ssh-remote' ? 'SSH' : provider === 'wsl' ? 'WSL' : undefined;
+    const suffix = label ? ` [${label}: ${machine}]` : undefined;
+    // workspace.name can already include VS Code's remote label.
+    if (suffix && workspace.endsWith(suffix)) {
+        workspace = workspace.slice(0, -suffix.length).trimEnd() || 'No workspace';
+    }
+    return `${workspace}[${machine}]|${term.name?.trim() || 'Terminal'}`;
 }
 
 async function focusUriForTerminal(tid: string): Promise<string> {
@@ -341,6 +366,12 @@ export function activate(ctx: vscode.ExtensionContext) {
         })
     );
 
+    ctx.subscriptions.push(vscode.window.onDidCloseTerminal(term => {
+        const tid = terminalIdMap.get(term);
+        if (tid) idToTerminal.delete(tid);
+        terminalIdMap.delete(term);
+    }));
+
     // Observe raw command execution output (VS Code Shell Integration API 1.93+)
     ctx.subscriptions.push(
         vscode.window.onDidStartTerminalShellExecution(async (event: vscode.TerminalShellExecutionStartEvent) => {
@@ -352,10 +383,9 @@ export function activate(ctx: vscode.ExtensionContext) {
 
             const parser = new OscParser(
                 (n) => {
-                    const title = n.kind === 'osc777' && n.title?.trim()
-                        ? n.title.trim()
-                        : (term.name?.trim() || 'Terminal');
-                    const body = n.body;
+                    const title = notificationTitle(term);
+                    const senderTitle = n.kind === 'osc777' ? n.title?.trim() : '';
+                    const body = senderTitle ? `${senderTitle}: ${n.body}` : n.body;
                     // Skip when the emitting terminal is already the focused one
                     // (user is clearly watching it — no need to interrupt).
                     if (getSetting('skipWhenActive', false)) {
