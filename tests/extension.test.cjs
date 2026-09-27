@@ -15,7 +15,7 @@ const bundle = buildSync({
 
 function harness({ platform = 'darwin', scheme = 'vscode', windowId = '42', failUri = false,
     workspaceName = 'research', authority = 'ssh-remote+xfusion6', remoteName = 'ssh-remote',
-    folderName = 'research', workspaceAuthority, focusCommandFails = false } = {}) {
+    folderName = 'research', workspaceAuthority, focusCommandFails = false, sound = '' } = {}) {
     const notifications = [];
     const resolvedUris = [];
     const errors = [];
@@ -47,7 +47,7 @@ function harness({ platform = 'darwin', scheme = 'vscode', windowId = '42', fail
             workspaceFolders: folderName ? [{ name: folderName, uri: {
                 scheme: authority ? 'vscode-remote' : 'file', authority,
             } }] : [],
-            getConfiguration: () => ({ get: (_key, fallback) => fallback }),
+            getConfiguration: () => ({ get: (key, fallback) => key === 'sound' ? sound : fallback }),
         },
         commands: {
             registerCommand: () => disposable,
@@ -114,6 +114,24 @@ test('macOS uses the terminal title and the unmodified window routing URI', asyn
     assert.equal(notification.activate, undefined);
     await h.click(notification);
     assert.equal(focused, true);
+});
+
+test('macOS passes the default sound through to terminal-notifier', async () => {
+    const h = harness({ sound: 'default' });
+    await h.emit({ name: 'Build' }, '\x1b]9;Done\x07');
+    assert.equal(h.notifications[0].sound, 'default');
+});
+
+test('macOS preserves explicitly selected system sounds', async () => {
+    const h = harness({ sound: 'Glass' });
+    await h.emit({ name: 'Build' }, '\x1b]9;Done\x07');
+    assert.equal(h.notifications[0].sound, 'Glass');
+});
+
+test('non-macOS keeps node-notifier default sound compatibility', async () => {
+    const h = harness({ platform: 'win32', sound: 'default' });
+    await h.emit({ name: 'Build' }, '\x1b]9;Done\x07');
+    assert.equal(h.notifications[0].sound, true);
 });
 
 test('different machines and workspaces route each notification to their own window and terminal', async () => {

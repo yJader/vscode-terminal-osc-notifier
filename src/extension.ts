@@ -304,7 +304,12 @@ async function sendOsNotification(tid: string, title: string, message: string) {
         //   Linux notify-send: no sound support.
         const sound = getSetting<string>('sound', '');
         if (sound) {
-            opts.sound = sound === 'default' ? true : sound;
+            // node-notifier translates `true` to the fixed macOS `Bottle` sound.
+            // terminal-notifier accepts the literal `default`, which lets
+            // Notification Center select macOS's current default sound.
+            opts.sound = process.platform === 'darwin'
+                ? sound
+                : sound === 'default' ? true : sound;
         }
 
         // Try to set the VS Code icon (each platform uses a different mechanism)
